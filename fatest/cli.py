@@ -39,7 +39,7 @@ def clear():
 
 def show_banner():
     console.print(Align.center(Text.from_markup(LOGO)))
-    console.print(Align.center(f"[dim]v{__version__} — network speed, no nonsense[/dim]"))
+    console.print(Align.center(f"[dim]v{__version__} — network speed, fast, cli[/dim]"))
     console.print()
 
 
