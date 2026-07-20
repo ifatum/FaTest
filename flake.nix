@@ -1,53 +1,29 @@
 {
-  description = "naxce configuration v2";
+  description = "FaTest - a fast, clean terminal speedtest tool";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    fatest = {
-      url = "path:/mnt/data/Coding/Python/FaTest";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      home-manager,
-      fatest,
-      ...
-    }@inputs:
-    let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-    in
-    {
-      nixosConfigurations = {
-        naxce = nixpkgs.lib.nixosSystem {
-          inherit system;
-          modules = [
-            ./configuration.nix
-            home-manager.nixosModules.home-manager
-            {
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.backupFileExtension = "backup";
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        fatest = pkgs.callPackage ./default.nix { };
+      in
+      {
+        packages.default = fatest;
+        packages.fatest = fatest;
 
-              home-manager.extraSpecialArgs = { inherit inputs; };
-              home-manager.users.naxce = import ./home.nix;
-            }
-          ];
+        apps.default = {
+          type = "app";
+          program = "${fatest}/bin/fatest";
         };
-      };
 
-      homeConfigurations.naxce = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
-        extraSpecialArgs = { inherit inputs; };
-        modules = [ ./home.nix ];
-      };
-    };
+        devShells.default = pkgs.mkShell {
+          buildInputs = [ fatest ];
+        };
+      }
+    );
 }
