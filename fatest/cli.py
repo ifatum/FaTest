@@ -2,21 +2,21 @@ import argparse
 import json
 import os
 import shlex
-import sys
-import time
 import socket
-import threading
 import statistics
+import sys
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
+from rich import box
+from rich.align import Align
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
-from rich.align import Align
 from rich.text import Text
-from rich.live import Live
-from rich import box
 
 from fatest import __version__
 
@@ -40,7 +40,7 @@ def clear():
 
 def show_banner():
     console.print(Align.center(Text.from_markup(LOGO)))
-    console.print(Align.center(f"[dim]v{__version__} — network speed, fast, cli[/dim]"))
+    console.print(Align.center(f"[dim]v{__version__} - network speed, fast, cli[/dim]"))
     console.print()
 
 
@@ -120,8 +120,7 @@ class NetSpeedMeter:
                 mbps = 0.0
 
             self.current_mbps = mbps
-            if mbps > self.peak_mbps:
-                self.peak_mbps = mbps
+            self.peak_mbps = max(self.peak_mbps, mbps)
 
             last = now
             last_t = now_t
@@ -130,7 +129,9 @@ class NetSpeedMeter:
         self.running = True
         self.current_mbps = 0.0
         self.peak_mbps = 0.0
-        self._thread = threading.Thread(target=self._watch, args=(direction,), daemon=True)
+        self._thread = threading.Thread(
+            target=self._watch, args=(direction,), daemon=True
+        )
         self._thread.start()
 
     def stop(self):
@@ -141,6 +142,7 @@ class NetSpeedMeter:
 
 def fetch_servers_with_retry(st, retries=3, delay=2):
     import time as _time
+
     last_err = None
     for attempt in range(retries):
         try:
@@ -168,13 +170,17 @@ def pick_server(st, country=None, server_id=None):
         fetch_servers_with_retry(st)
         country = country.upper()
         matches = [
-            s for group in st.servers.values() for s in group
+            s
+            for group in st.servers.values()
+            for s in group
             if s.get("cc", "").upper() == country
         ]
         if matches:
             st.get_best_server(matches)
             return
-        console.print(f"[yellow]No servers found for country '{country}', falling back to auto-detect.[/yellow]")
+        console.print(
+            f"[yellow]No servers found for country '{country}', falling back to auto-detect.[/yellow]"
+        )
 
     st.get_best_server()
 
@@ -189,7 +195,9 @@ def cmd_list_servers(args):
         try:
             fetch_servers_with_retry(st)
         except Exception:
-            console.print("[yellow]Failed to fetch the full server list, trying the local list...[/yellow]")
+            console.print(
+                "[yellow]Failed to fetch the full server list, trying the local list...[/yellow]"
+            )
 
         cc = args.country.upper()
         all_servers = [s for group in st.servers.values() for s in group]
@@ -206,7 +214,9 @@ def cmd_list_servers(args):
         fetch_servers_with_retry(st)
         all_servers = [s for group in st.servers.values() for s in group]
 
-    all_servers = sorted(all_servers, key=lambda s: float(s.get("d", 9999)))[:args.limit]
+    all_servers = sorted(all_servers, key=lambda s: float(s.get("d", 9999)))[
+        : args.limit
+    ]
 
     if not all_servers:
         console.print("[yellow]No servers matched.[/yellow]")
@@ -229,7 +239,9 @@ def cmd_list_servers(args):
         )
 
     console.print(table)
-    console.print("\n[dim]use --server ID or set a default with: fatest config --server ID[/dim]")
+    console.print(
+        "\n[dim]use --server ID or set a default with: fatest config --server ID[/dim]"
+    )
 
 
 def run_test(country=None, server_id=None):
@@ -245,7 +257,9 @@ def run_test(country=None, server_id=None):
     result["server"] = f"{server['sponsor']} ({server['name']}, {server['country']})"
     result["ping"] = round(st.results.ping, 1)
 
-    console.print(f"[dim]server:[/dim] {result['server']}  [dim]· ping[/dim] {result['ping']} ms\n")
+    console.print(
+        f"[dim]server:[/dim] {result['server']}  [dim]· ping[/dim] {result['ping']} ms\n"
+    )
 
     meter = NetSpeedMeter()
 
@@ -260,7 +274,9 @@ def run_test(country=None, server_id=None):
         return Align.center(text)
 
     down_mbps = 0.0
-    with Live(render_gauge("download", 0, 1, "green"), console=console, refresh_per_second=12) as live:
+    with Live(
+        render_gauge("download", 0, 1, "green"), console=console, refresh_per_second=12
+    ) as live:
         meter.start("download")
         holder = {}
 
@@ -270,18 +286,26 @@ def run_test(country=None, server_id=None):
         t = threading.Thread(target=worker)
         t.start()
         while t.is_alive():
-            live.update(render_gauge("download", meter.current_mbps, meter.peak_mbps, "green"))
+            live.update(
+                render_gauge("download", meter.current_mbps, meter.peak_mbps, "green")
+            )
             time.sleep(0.08)
         t.join()
         meter.stop()
         down_mbps = holder["value"]
-        live.update(render_gauge("download", down_mbps, max(meter.peak_mbps, down_mbps), "green"))
+        live.update(
+            render_gauge(
+                "download", down_mbps, max(meter.peak_mbps, down_mbps), "green"
+            )
+        )
 
     result["download"] = down_mbps
     console.print()
 
     up_mbps = 0.0
-    with Live(render_gauge("upload", 0, 1, "yellow"), console=console, refresh_per_second=12) as live:
+    with Live(
+        render_gauge("upload", 0, 1, "yellow"), console=console, refresh_per_second=12
+    ) as live:
         meter.start("upload")
         holder = {}
 
@@ -291,12 +315,16 @@ def run_test(country=None, server_id=None):
         t = threading.Thread(target=worker)
         t.start()
         while t.is_alive():
-            live.update(render_gauge("upload", meter.current_mbps, meter.peak_mbps, "yellow"))
+            live.update(
+                render_gauge("upload", meter.current_mbps, meter.peak_mbps, "yellow")
+            )
             time.sleep(0.08)
         t.join()
         meter.stop()
         up_mbps = holder["value"]
-        live.update(render_gauge("upload", up_mbps, max(meter.peak_mbps, up_mbps), "yellow"))
+        live.update(
+            render_gauge("upload", up_mbps, max(meter.peak_mbps, up_mbps), "yellow")
+        )
 
     result["upload"] = up_mbps
     console.print()
@@ -312,17 +340,32 @@ def run_test(country=None, server_id=None):
 
 def print_result(result):
     console.print()
-    table = Table(box=box.ROUNDED, show_header=False, border_style="cyan", padding=(0, 2))
+    table = Table(
+        box=box.ROUNDED, show_header=False, border_style="cyan", padding=(0, 2)
+    )
     table.add_column(style="bold white")
     table.add_column(style="white")
 
     table.add_row("Server", result["server"])
     table.add_row("Ping", f"{result['ping']} ms")
-    table.add_row("Download", f"[bold green]{human_speed(result['download'])}[/bold green]  {rating_bar(result['download'])}")
-    table.add_row("Upload", f"[bold yellow]{human_speed(result['upload'])}[/bold yellow]  {rating_bar(result['upload'])}")
+    table.add_row(
+        "Download",
+        f"[bold green]{human_speed(result['download'])}[/bold green]  {rating_bar(result['download'])}",
+    )
+    table.add_row(
+        "Upload",
+        f"[bold yellow]{human_speed(result['upload'])}[/bold yellow]  {rating_bar(result['upload'])}",
+    )
     table.add_row("Your IP", result.get("client_ip", "unknown"))
 
-    console.print(Panel(table, title="[bold magenta]Results[/bold magenta]", border_style="magenta", expand=False))
+    console.print(
+        Panel(
+            table,
+            title="[bold magenta]Results[/bold magenta]",
+            border_style="magenta",
+            expand=False,
+        )
+    )
     console.print()
 
 
@@ -359,7 +402,7 @@ def cmd_history(args):
     table.add_column("Upload", justify="right", style="yellow")
     table.add_column("Server")
 
-    entries = history[-args.last:]
+    entries = history[-args.last :]
     for r in entries:
         table.add_row(
             r["timestamp"].replace("T", " "),
@@ -375,7 +418,9 @@ def cmd_history(args):
         downs = [r["download"] for r in entries]
         ups = [r["upload"] for r in entries]
         console.print()
-        console.print(f"[dim]avg download {human_speed(statistics.mean(downs))} · avg upload {human_speed(statistics.mean(ups))}[/dim]")
+        console.print(
+            f"[dim]avg download {human_speed(statistics.mean(downs))} · avg upload {human_speed(statistics.mean(ups))}[/dim]"
+        )
 
 
 def cmd_clear_history(args):
@@ -392,7 +437,7 @@ def cmd_monitor(args):
     cfg = load_config()
     country = args.country or cfg.get("country")
     server_id = args.server or cfg.get("server_id")
-    console.print(f"[dim]watching every {args.interval}s — ctrl+c to stop[/dim]\n")
+    console.print(f"[dim]watching every {args.interval}s - ctrl+c to stop[/dim]\n")
     try:
         while True:
             result = run_test(country=country, server_id=server_id)
@@ -427,7 +472,9 @@ def cmd_config(args):
 
     changed = False
     if args.country is not None:
-        cfg["country"] = args.country.upper() if args.country.lower() != "none" else None
+        cfg["country"] = (
+            args.country.upper() if args.country.lower() != "none" else None
+        )
         changed = True
     if args.server is not None:
         cfg["server_id"] = args.server if args.server.lower() != "none" else None
@@ -458,7 +505,9 @@ HELP_WORDS = {"help", "?", "h"}
 
 
 def show_menu():
-    table = Table(box=box.SIMPLE, show_header=False, border_style="cyan", padding=(0, 1))
+    table = Table(
+        box=box.SIMPLE, show_header=False, border_style="cyan", padding=(0, 1)
+    )
     table.add_column(style="bold cyan", justify="right")
     table.add_column(style="bold white")
     table.add_column(style="dim")
@@ -466,9 +515,20 @@ def show_menu():
     for num, name, desc in MENU_ITEMS:
         table.add_row(f"[{num}]", name, desc)
 
-    console.print(Panel(table, title="[bold magenta]Menu[/bold magenta]", border_style="magenta", expand=False))
-    console.print("[dim]Type a number, a command name, or a full command with flags.[/dim]")
-    console.print("[dim]Examples:[/dim]  2   [dim]|[/dim]  servers --country PL   [dim]|[/dim]  test --json\n")
+    console.print(
+        Panel(
+            table,
+            title="[bold magenta]Menu[/bold magenta]",
+            border_style="magenta",
+            expand=False,
+        )
+    )
+    console.print(
+        "[dim]Type a number, a command name, or a full command with flags.[/dim]"
+    )
+    console.print(
+        "[dim]Examples:[/dim]  2   [dim]|[/dim]  servers --country PL   [dim]|[/dim]  test --json\n"
+    )
 
 
 def show_help(parser):
@@ -484,7 +544,7 @@ def show_help(parser):
 
 def interactive_menu(parser):
     """Command-driven menu: still pure CLI, still controlled only by typed
-    commands — this just gives you a discoverable list of what fatest can do
+    commands - this just gives you a discoverable list of what fatest can do
     instead of making you remember every subcommand and flag."""
     while True:
         clear()
@@ -555,17 +615,25 @@ def interactive_menu(parser):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="fatest",
-        description="FaTest — a fast, clean terminal speedtest.",
+        description="FaTest - a fast, clean terminal speedtest.",
     )
     parser.add_argument("--version", action="version", version=f"FaTest {__version__}")
 
     sub = parser.add_subparsers(dest="command")
 
     p_test = sub.add_parser("test", help="run a speed test")
-    p_test.add_argument("--json", action="store_true", help="also print raw JSON result")
-    p_test.add_argument("--no-save", action="store_true", help="don't store this run in history")
-    p_test.add_argument("--country", type=str, default=None, help="two-letter country code, e.g. PL")
-    p_test.add_argument("--server", type=str, default=None, help="specific speedtest.net server ID")
+    p_test.add_argument(
+        "--json", action="store_true", help="also print raw JSON result"
+    )
+    p_test.add_argument(
+        "--no-save", action="store_true", help="don't store this run in history"
+    )
+    p_test.add_argument(
+        "--country", type=str, default=None, help="two-letter country code, e.g. PL"
+    )
+    p_test.add_argument(
+        "--server", type=str, default=None, help="specific speedtest.net server ID"
+    )
     p_test.set_defaults(func=cmd_test)
 
     p_hist = sub.add_parser("history", help="show past results")
@@ -576,19 +644,40 @@ def build_parser():
     p_clear.set_defaults(func=cmd_clear_history)
 
     p_mon = sub.add_parser("monitor", help="run tests repeatedly at an interval")
-    p_mon.add_argument("--interval", type=int, default=300, help="seconds between runs (default 300)")
-    p_mon.add_argument("--country", type=str, default=None, help="two-letter country code, e.g. PL")
-    p_mon.add_argument("--server", type=str, default=None, help="specific speedtest.net server ID")
+    p_mon.add_argument(
+        "--interval", type=int, default=300, help="seconds between runs (default 300)"
+    )
+    p_mon.add_argument(
+        "--country", type=str, default=None, help="two-letter country code, e.g. PL"
+    )
+    p_mon.add_argument(
+        "--server", type=str, default=None, help="specific speedtest.net server ID"
+    )
     p_mon.set_defaults(func=cmd_monitor)
 
     p_servers = sub.add_parser("servers", help="list nearby speedtest servers")
-    p_servers.add_argument("--country", type=str, default=None, help="filter by two-letter country code, e.g. PL")
+    p_servers.add_argument(
+        "--country",
+        type=str,
+        default=None,
+        help="filter by two-letter country code, e.g. PL",
+    )
     p_servers.add_argument("--limit", type=int, default=15, help="how many to show")
     p_servers.set_defaults(func=cmd_list_servers)
 
     p_cfg = sub.add_parser("config", help="view or set default country/server")
-    p_cfg.add_argument("--country", type=str, default=None, help="set default country code (or 'none' to clear)")
-    p_cfg.add_argument("--server", type=str, default=None, help="set default server ID (or 'none' to clear)")
+    p_cfg.add_argument(
+        "--country",
+        type=str,
+        default=None,
+        help="set default country code (or 'none' to clear)",
+    )
+    p_cfg.add_argument(
+        "--server",
+        type=str,
+        default=None,
+        help="set default server ID (or 'none' to clear)",
+    )
     p_cfg.add_argument("--show", action="store_true", help="print current config")
     p_cfg.set_defaults(func=cmd_config)
 
@@ -599,7 +688,7 @@ def main():
     parser = build_parser()
 
     if not sys.argv[1:]:
-        # No subcommand given — e.g. launched from the desktop/start-menu
+        # No subcommand given - e.g. launched from the desktop/start-menu
         # shortcut, or just typed `fatest` in a terminal. Open the
         # interactive command menu instead of guessing what to run.
         interactive_menu(parser)

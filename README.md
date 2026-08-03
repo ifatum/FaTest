@@ -15,7 +15,7 @@ $ fatest
     |  _| (_| || |  __/\__ \ |_
     |_|  \__,_||_|\___||___/\__|
 
-              v2.0.0 — network speed, fast, cli
+              v2.0.0 - network speed, fast, cli
 
   ╭──────────────────────────── Menu ────────────────────────────╮
   │  [1]  test            run a speed test                       │
@@ -35,23 +35,23 @@ $ fatest
 
 ## What's new in v2.0
 
-Launching FaTest — whether by typing `fatest` in a terminal or by clicking its
-desktop/menu shortcut — now opens an interactive command menu instead of
+Launching FaTest - whether by typing `fatest` in a terminal or by clicking its
+desktop/menu shortcut - now opens an interactive command menu instead of
 immediately firing off a test. It's still a pure command-line tool: nothing to
 click, no mouse required. You either type the number next to an option, the
 command name itself, or a full command with its flags (e.g. `servers
 --country PL`), and FaTest runs it right there in the same window.
 
 All the old direct subcommands still work exactly as before, so existing
-scripts and muscle memory aren't affected — see [Usage](#usage) below.
+scripts and muscle memory aren't affected - see [Usage](#usage) below.
 
 ## What it does
 
 - Runs a real download/upload/ping test against a nearby server
-- Shows a **live gauge** while it measures — actual real-time Mbps read straight off your network interface, not a fake progress bar
+- Shows a **live gauge** while it measures - actual real-time Mbps read straight off your network interface, not a fake progress bar
 - Lets you pick which server or country to test against, instead of trusting auto-detect blindly
 - Keeps a local history of every run (`~/.fatest_history.json`)
-- `monitor` mode — runs on a loop, good for babysitting a flaky connection
+- `monitor` mode - runs on a loop, good for babysitting a flaky connection
 - An interactive command menu on launch, plus full direct-subcommand support for scripting
 - Everything colored and readable, nothing dumped as raw text walls
 
@@ -66,7 +66,7 @@ pip install -e .
 fatest
 ```
 
-This works the same way on Linux, macOS, and Windows — clone the repo, build
+This works the same way on Linux, macOS, and Windows - clone the repo, build
 it locally, and the `fatest` command is on your `PATH`.
 
 ### NixOS / Nix
@@ -92,7 +92,7 @@ To use it as a flake input or add it to your system config, package it from `def
 ## Desktop icon / shortcut
 
 Once `fatest` is built (see above), you can add it as a regular application
-with an icon that opens your default terminal and launches FaTest — straight
+with an icon that opens your default terminal and launches FaTest - straight
 into its interactive menu.
 
 ### Linux
@@ -103,7 +103,7 @@ into its interactive menu.
 
 Adds a `FaTest` entry with an icon to your application menu (`~/.local/share/applications`).
 Clicking it opens the default terminal for your desktop environment (GNOME, KDE, XFCE, etc.)
-and launches `fatest` in it — exactly like any other terminal app (e.g. htop in your menu).
+and launches `fatest` in it - exactly like any other terminal app (e.g. htop in your menu).
 
 ### Windows
 
@@ -134,12 +134,12 @@ fatest monitor --interval 60   # repeat every 60 seconds
 fatest --version
 ```
 
-Every one of these also works from inside the interactive menu — just type
+Every one of these also works from inside the interactive menu - just type
 the part after `fatest`, e.g. `test --json` or `history --last 30`.
 
 ## Picking a server
 
-By default the tool auto-detects "the best" server, which sometimes isn't the closest one geographically — it's just whichever answered fastest during detection, and that list can be thin in some regions. If you keep landing on a server in another country, pin one yourself:
+By default the tool auto-detects "the best" server, which sometimes isn't the closest one geographically - it's just whichever answered fastest during detection, and that list can be thin in some regions. If you keep landing on a server in another country, pin one yourself:
 
 ```bash
 fatest servers                # list nearby servers with their IDs
@@ -170,4 +170,4 @@ Most terminal speedtest wrappers either look like they're stuck in 2009 or dump 
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
