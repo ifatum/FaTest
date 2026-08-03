@@ -585,7 +585,6 @@ def interactive_menu(parser):
         try:
             args = parser.parse_args(tokens)
         except SystemExit:
-            # argparse already printed usage/error output
             console.print("[dim]Press enter to return to the menu...[/dim]")
             try:
                 console.input()
@@ -688,9 +687,6 @@ def main():
     parser = build_parser()
 
     if not sys.argv[1:]:
-        # No subcommand given - e.g. launched from the desktop/start-menu
-        # shortcut, or just typed `fatest` in a terminal. Open the
-        # interactive command menu instead of guessing what to run.
         interactive_menu(parser)
         return
 

@@ -9,21 +9,17 @@ result
 venv/
 *.spec
 
-# narzędzia/edytory
 .vscode/
 .idea/
 *.swp
 .DS_Store
 
-# pliki wynikowe programu
 .fatest_history.json
 .fatest_config.json
 
-# testy/coverage
 .pytest_cache/
 .coverage
 htmlcov/
 
-# środowiska
 .env
 .python-version
