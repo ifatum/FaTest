@@ -39,21 +39,13 @@ $ fatest
 
 ## Install
 
-### Linux / macOS (pipx, recommended)
+### From source (Windows, Linux, macOS, any OS)
 
 ```bash
-pipx install fatest
+git clone https://github.com/naxce/fatest
+cd fatest
+pip install -e .
 ```
-
-Don't have pipx? `pip install --user pipx && pipx ensurepath`, then run the line above.
-
-### Linux / macOS (plain pip)
-
-```bash
-pip install fatest --break-system-packages
-```
-
-(The `--break-system-packages` flag is only needed on distros that lock down the system Python, like recent Debian/Ubuntu. Skip it if pip complains it doesn't recognize the flag.)
 
 ### NixOS / Nix
 
@@ -74,25 +66,6 @@ nix-build
 ```
 
 To use it as a flake input or add it to your system config, package it from `default.nix` the way you would any other Python application in your `overlays` or `packages`.
-
-### Windows
-
-Install Python 3.8+ from [python.org](https://www.python.org/downloads/) (or the Microsoft Store), then in PowerShell or CMD:
-
-```powershell
-pip install fatest
-fatest
-```
-
-If `fatest` isn't recognized after install, make sure Python's Scripts folder is on your `PATH` (the python.org installer has a checkbox for this — tick it).
-
-### From source (any OS)
-
-```bash
-git clone https://github.com/naxce/fatest
-cd fatest
-pip install -e .
-```
 
 ## Usage
 
