@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=FaTest
+GenericName=Speedtest
+Comment=Fast, clean terminal speedtest tool
+Exec=fatest
+Icon=fatest
+Terminal=true
+Categories=Network;Utility;ConsoleOnly;
+Keywords=speedtest;speed;test;network;bandwidth;internet;
+StartupNotify=true

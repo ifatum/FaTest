@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shlex
 import sys
 import time
 import socket
@@ -188,7 +189,7 @@ def cmd_list_servers(args):
         try:
             fetch_servers_with_retry(st)
         except Exception:
-            console.print("[yellow]Nie udało się pobrać pełnej listy serwerów, próbuję lokalnej listy...[/yellow]")
+            console.print("[yellow]Failed to fetch the full server list, trying the local list...[/yellow]")
 
         cc = args.country.upper()
         all_servers = [s for group in st.servers.values() for s in group]
@@ -440,6 +441,117 @@ def cmd_config(args):
         console.print_json(json.dumps(cfg))
 
 
+MENU_ITEMS = [
+    ("1", "test", "run a speed test"),
+    ("2", "servers", "list nearby servers"),
+    ("3", "history", "show past results"),
+    ("4", "clear-history", "wipe stored history"),
+    ("5", "monitor", "repeat testing on a loop"),
+    ("6", "config", "view or set default country/server"),
+    ("7", "help", "show all commands and flags"),
+    ("0", "exit", "quit fatest"),
+]
+
+MENU_ALIASES = {num: name for num, name, _ in MENU_ITEMS}
+EXIT_WORDS = {"0", "exit", "quit", "q"}
+HELP_WORDS = {"help", "?", "h"}
+
+
+def show_menu():
+    table = Table(box=box.SIMPLE, show_header=False, border_style="cyan", padding=(0, 1))
+    table.add_column(style="bold cyan", justify="right")
+    table.add_column(style="bold white")
+    table.add_column(style="dim")
+
+    for num, name, desc in MENU_ITEMS:
+        table.add_row(f"[{num}]", name, desc)
+
+    console.print(Panel(table, title="[bold magenta]Menu[/bold magenta]", border_style="magenta", expand=False))
+    console.print("[dim]Type a number, a command name, or a full command with flags.[/dim]")
+    console.print("[dim]Examples:[/dim]  2   [dim]|[/dim]  servers --country PL   [dim]|[/dim]  test --json\n")
+
+
+def show_help(parser):
+    console.print()
+    parser.print_help()
+    console.print()
+    console.print("[dim]Press enter to return to the menu...[/dim]")
+    try:
+        console.input()
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+def interactive_menu(parser):
+    """Command-driven menu: still pure CLI, still controlled only by typed
+    commands — this just gives you a discoverable list of what fatest can do
+    instead of making you remember every subcommand and flag."""
+    while True:
+        clear()
+        show_banner()
+        show_menu()
+
+        try:
+            line = console.input("[bold cyan]fatest[/bold cyan][dim]>[/dim] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]bye.[/dim]")
+            break
+
+        if not line:
+            continue
+
+        try:
+            tokens = shlex.split(line)
+        except ValueError as e:
+            console.print(f"[bold red]Couldn't parse that:[/bold red] {e}")
+            continue
+
+        if not tokens:
+            continue
+
+        head = tokens[0].lower()
+
+        if head in EXIT_WORDS:
+            console.print("[dim]bye.[/dim]")
+            break
+
+        if head in HELP_WORDS:
+            show_help(parser)
+            continue
+
+        if head in MENU_ALIASES:
+            tokens[0] = MENU_ALIASES[head]
+
+        try:
+            args = parser.parse_args(tokens)
+        except SystemExit:
+            # argparse already printed usage/error output
+            console.print("[dim]Press enter to return to the menu...[/dim]")
+            try:
+                console.input()
+            except (EOFError, KeyboardInterrupt):
+                break
+            continue
+
+        if not getattr(args, "func", None):
+            continue
+
+        try:
+            args.func(args)
+        except socket.gaierror:
+            console.print("[bold red]No network connection found.[/bold red]")
+        except KeyboardInterrupt:
+            console.print("\n[dim]Cancelled.[/dim]")
+        except Exception as e:
+            console.print(f"[bold red]Something went wrong:[/bold red] {e}")
+
+        console.print("\n[dim]Press enter to return to the menu...[/dim]")
+        try:
+            console.input()
+        except (EOFError, KeyboardInterrupt):
+            break
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="fatest",
@@ -449,7 +561,7 @@ def build_parser():
 
     sub = parser.add_subparsers(dest="command")
 
-    p_test = sub.add_parser("test", help="run a speed test (default)")
+    p_test = sub.add_parser("test", help="run a speed test")
     p_test.add_argument("--json", action="store_true", help="also print raw JSON result")
     p_test.add_argument("--no-save", action="store_true", help="don't store this run in history")
     p_test.add_argument("--country", type=str, default=None, help="two-letter country code, e.g. PL")
@@ -485,14 +597,19 @@ def build_parser():
 
 def main():
     parser = build_parser()
+
+    if not sys.argv[1:]:
+        # No subcommand given — e.g. launched from the desktop/start-menu
+        # shortcut, or just typed `fatest` in a terminal. Open the
+        # interactive command menu instead of guessing what to run.
+        interactive_menu(parser)
+        return
+
     args = parser.parse_args()
 
-    if not args.command:
-        args.func = cmd_test
-        args.json = False
-        args.no_save = False
-        args.country = None
-        args.server = None
+    if not getattr(args, "func", None):
+        interactive_menu(parser)
+        return
 
     try:
         args.func(args)

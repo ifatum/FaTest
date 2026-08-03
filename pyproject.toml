@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fatest"
-version = "1.1.0"
+version = "2.0.0"
 description = "A fast, clean terminal speedtest tool"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -2,7 +2,7 @@
 
 pkgs.python3Packages.buildPythonApplication rec {
   pname = "fatest";
-  version = "1.1.0";
+  version = "2.0.0";
   format = "pyproject";
 
   src = ./.;
