@@ -3,27 +3,61 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = import nixpkgs { inherit system; };
-        fatest = pkgs.callPackage ./default.nix { };
-      in
-      {
-        packages.default = fatest;
-        packages.fatest = fatest;
+  outputs =
+    { self, nixpkgs }:
+    let
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
 
-        apps.default = {
-          type = "app";
-          program = "${fatest}/bin/fatest";
-        };
+      forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f system);
+    in
+    {
+      packages = forEachSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+          };
 
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ fatest ];
-        };
-      }
-    );
+          fatest = pkgs.callPackage ./default.nix { };
+        in
+        {
+          default = fatest;
+          fatest = fatest;
+        }
+      );
+
+      apps = forEachSystem (
+        system:
+        let
+          fatest = self.packages.${system}.default;
+        in
+        {
+          default = {
+            type = "app";
+            program = "${fatest}/bin/fatest";
+          };
+        }
+      );
+
+      devShells = forEachSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+          };
+
+          fatest = pkgs.callPackage ./default.nix { };
+        in
+        {
+          default = pkgs.mkShell {
+            buildInputs = [ fatest ];
+          };
+        }
+      );
+    };
 }
