@@ -126,6 +126,7 @@ fatest                    # opens the interactive command menu
 fatest test                # run a test directly
 fatest test --json         # run a test, also dump raw JSON
 fatest test --no-save      # run a test without saving to history
+fatest test --stream       # progress and result as JSON lines, for other programs
 fatest history              # show your last 10 results
 fatest history --last 30    # show more
 fatest clear-history         # wipe saved history
@@ -139,7 +140,7 @@ the part after `fatest`, e.g. `test --json` or `history --last 30`.
 
 ## Picking a server
 
-By default the tool auto-detects "the best" server, which sometimes isn't the closest one geographically - it's just whichever answered fastest during detection, and that list can be thin in some regions. If you keep landing on a server in another country, pin one yourself:
+By default FaTest takes the 5 servers nearest to you from speedtest.net's current server list and uses the one that answers fastest. You can still pin a country or one server yourself:
 
 ```bash
 fatest servers                # list nearby servers with their IDs
@@ -157,7 +158,7 @@ fatest config --show           # see current defaults
 fatest config --country none   # clear the default
 ```
 
-`test` and `monitor` both respect the saved config, and an explicit `--country`/`--server` flag on the command line always overrides it for that one run.
+`test` and `monitor` both respect the saved config. Any `--country` or `--server` flag on the command line replaces the whole saved default for that one run, so `--country DE` is not overridden by a saved server. A saved server that is no longer nearby falls back to the best nearby one with a warning.
 
 ## Why another speedtest tool
 

@@ -87,6 +87,14 @@ def live_gauge_bar(mbps, peak, width=30):
     return bar
 
 
+def external_counters():
+    import psutil
+
+    nics = psutil.net_io_counters(pernic=True)
+    real = [c for name, c in nics.items() if name != "lo"]
+    return sum(c.bytes_recv for c in real), sum(c.bytes_sent for c in real)
+
+
 class NetSpeedMeter:
     """Reads real interface throughput via psutil while a transfer runs."""
 
@@ -97,23 +105,18 @@ class NetSpeedMeter:
         self._thread = None
 
     def _watch(self, direction):
-        import psutil
-
-        last = psutil.net_io_counters()
+        last = external_counters()
         last_t = time.monotonic()
 
         while self.running:
             time.sleep(0.12)
-            now = psutil.net_io_counters()
+            now = external_counters()
             now_t = time.monotonic()
             dt = now_t - last_t
             if dt <= 0:
                 continue
 
-            if direction == "download":
-                delta_bytes = now.bytes_recv - last.bytes_recv
-            else:
-                delta_bytes = now.bytes_sent - last.bytes_sent
+            delta_bytes = now[0] - last[0] if direction == "download" else now[1] - last[1]
 
             mbps = (delta_bytes * 8 / dt) / 1_000_000
             if mbps < 0:
@@ -140,83 +143,97 @@ class NetSpeedMeter:
             self._thread.join(timeout=1)
 
 
-def fetch_servers_with_retry(st, retries=3, delay=2):
-    import time as _time
+SERVERS_API = "https://www.speedtest.net/api/js/servers"
+CANDIDATES = 5
 
+
+def to_server(raw):
+    return {
+        "id": str(raw["id"]),
+        "url": raw["url"],
+        "host": raw.get("host", ""),
+        "sponsor": raw.get("sponsor", ""),
+        "name": raw.get("name", ""),
+        "country": raw.get("country", ""),
+        "cc": raw.get("cc", ""),
+        "lat": raw.get("lat", ""),
+        "lon": raw.get("lon", ""),
+        "d": float(raw.get("distance", 0) or 0),
+    }
+
+
+def fetch_servers(search=None, limit=100, retries=3, delay=2):
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    query = {"engine": "js", "https_functional": "true", "limit": limit}
+    if search:
+        query["search"] = search
+    request = Request(
+        f"{SERVERS_API}?{urlencode(query)}", headers={"User-Agent": f"fatest/{__version__}"}
+    )
     last_err = None
     for attempt in range(retries):
         try:
-            st.get_servers()
-            return
+            with urlopen(request, timeout=10) as response:
+                raw = json.loads(response.read().decode("utf-8"))
+            servers = [to_server(s) for s in raw if s.get("url") and s.get("id")]
+            return sorted(servers, key=lambda s: s["d"])
         except Exception as e:
             last_err = e
             if "429" in str(e):
-                _time.sleep(delay * (attempt + 1))
+                time.sleep(delay * (attempt + 1))
                 continue
             raise
     raise last_err
 
 
-def pick_server(st, country=None, server_id=None):
+def resolve_target(args, cfg):
+    if getattr(args, "country", None) or getattr(args, "server", None):
+        return args.country, args.server
+    return cfg.get("country"), cfg.get("server_id")
+
+
+def choose_candidates(country=None, server_id=None, warn=None):
+    warn = warn or (lambda msg: None)
     if server_id:
-        st.get_servers([server_id])
-        candidates = [s for group in st.servers.values() for s in group]
-        if candidates:
-            best = candidates[0]
-            st.get_best_server([best])
-            return
+        match = [s for s in fetch_servers() if s["id"] == str(server_id)]
+        if match:
+            return match
+        warn(f"Server {server_id} is not among the nearby servers, picking the best one instead.")
 
     if country:
-        fetch_servers_with_retry(st)
-        country = country.upper()
-        matches = [
-            s
-            for group in st.servers.values()
-            for s in group
-            if s.get("cc", "").upper() == country
-        ]
+        cc = country.upper()
+        matches = [s for s in fetch_servers(search=cc) if s["cc"].upper() == cc]
         if matches:
-            st.get_best_server(matches)
-            return
-        console.print(
-            f"[yellow]No servers found for country '{country}', falling back to auto-detect.[/yellow]"
-        )
+            return matches[:CANDIDATES]
+        warn(f"No servers found for country '{cc}', falling back to auto-detect.")
 
-    st.get_best_server()
+    return fetch_servers(limit=CANDIDATES * 2)[:CANDIDATES]
+
+
+def pick_server(st, country=None, server_id=None, warn=None):
+    try:
+        candidates = choose_candidates(country, server_id, warn)
+    except Exception as e:
+        (warn or (lambda msg: None))(f"Server list unavailable ({e}), using the legacy list.")
+        candidates = []
+    if candidates:
+        st.get_best_server(candidates)
+    else:
+        st.get_best_server()
 
 
 def cmd_list_servers(args):
-    import speedtest
-
     console.print("[dim]fetching server list...[/dim]")
-    st = speedtest.Speedtest()
 
     if args.country:
-        try:
-            fetch_servers_with_retry(st)
-        except Exception:
-            console.print(
-                "[yellow]Failed to fetch the full server list, trying the local list...[/yellow]"
-            )
-
         cc = args.country.upper()
-        all_servers = [s for group in st.servers.values() for s in group]
-        all_servers = [s for s in all_servers if s.get("cc", "").upper() == cc]
-
-        if not all_servers:
-            try:
-                st.get_servers(servers=[])
-            except Exception:
-                pass
-            all_servers = [s for group in st.servers.values() for s in group]
-            all_servers = [s for s in all_servers if s.get("cc", "").upper() == cc]
+        all_servers = [s for s in fetch_servers(search=cc) if s["cc"].upper() == cc]
     else:
-        fetch_servers_with_retry(st)
-        all_servers = [s for group in st.servers.values() for s in group]
+        all_servers = fetch_servers(limit=max(args.limit, 1))
 
-    all_servers = sorted(all_servers, key=lambda s: float(s.get("d", 9999)))[
-        : args.limit
-    ]
+    all_servers = all_servers[: args.limit]
 
     if not all_servers:
         console.print("[yellow]No servers matched.[/yellow]")
@@ -251,7 +268,7 @@ def run_test(country=None, server_id=None):
     st = speedtest.Speedtest()
 
     with console.status("[bold cyan]locating server...", spinner="dots"):
-        pick_server(st, country=country, server_id=server_id)
+        pick_server(st, country=country, server_id=server_id, warn=lambda m: console.print(f"[yellow]{m}[/yellow]"))
 
     server = st.results.server
     result["server"] = f"{server['sponsor']} ({server['name']}, {server['country']})"
@@ -336,6 +353,62 @@ def run_test(country=None, server_id=None):
         result["client_ip"] = "unknown"
 
     return result
+
+
+def emit(event, **data):
+    sys.stdout.write(json.dumps(dict(event=event, **data)) + "\n")
+    sys.stdout.flush()
+
+
+def measure(st, direction, tick=0.25):
+    meter = NetSpeedMeter()
+    holder = {}
+
+    def worker():
+        try:
+            run = st.download if direction == "download" else st.upload
+            holder["value"] = run() / 1_000_000
+        except Exception as e:
+            holder["error"] = e
+
+    meter.start(direction)
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    while t.is_alive():
+        t.join(tick)
+        emit(direction, mbps=round(meter.current_mbps, 2))
+    meter.stop()
+    if "error" in holder:
+        raise holder["error"]
+    return holder["value"]
+
+
+def stream_test(country=None, server_id=None, save=True, speedtest_module=None):
+    try:
+        st = (speedtest_module or __import__("speedtest")).Speedtest()
+        emit("status", phase="server")
+        pick_server(st, country=country, server_id=server_id, warn=lambda m: emit("warning", message=m))
+        server = st.results.server
+        result = {
+            "server": f"{server['sponsor']} ({server['name']}, {server['country']})",
+            "ping": round(st.results.ping, 1),
+        }
+        emit("server", server=result["server"], id=str(server.get("id", "")), ping=result["ping"])
+        result["download"] = measure(st, "download")
+        emit("download", mbps=round(result["download"], 2), done=True)
+        result["upload"] = measure(st, "upload")
+        emit("upload", mbps=round(result["upload"], 2), done=True)
+        result["timestamp"] = datetime.now().isoformat(timespec="seconds")
+        try:
+            result["client_ip"] = st.results.client.get("ip", "unknown")
+        except Exception:
+            result["client_ip"] = "unknown"
+        if save:
+            save_history(result)
+        emit("result", result=result)
+    except Exception as e:
+        emit("error", message=str(e) or e.__class__.__name__)
+        sys.exit(1)
 
 
 def print_result(result):
@@ -434,9 +507,7 @@ def cmd_clear_history(args):
 def cmd_monitor(args):
     clear()
     show_banner()
-    cfg = load_config()
-    country = args.country or cfg.get("country")
-    server_id = args.server or cfg.get("server_id")
+    country, server_id = resolve_target(args, load_config())
     console.print(f"[dim]watching every {args.interval}s - ctrl+c to stop[/dim]\n")
     try:
         while True:
@@ -450,11 +521,12 @@ def cmd_monitor(args):
 
 
 def cmd_test(args):
+    country, server_id = resolve_target(args, load_config())
+    if args.stream:
+        stream_test(country, server_id, save=not args.no_save)
+        return
     clear()
     show_banner()
-    cfg = load_config()
-    country = args.country or cfg.get("country")
-    server_id = args.server or cfg.get("server_id")
     result = run_test(country=country, server_id=server_id)
     print_result(result)
     if not args.no_save:
@@ -626,6 +698,11 @@ def build_parser():
     )
     p_test.add_argument(
         "--no-save", action="store_true", help="don't store this run in history"
+    )
+    p_test.add_argument(
+        "--stream",
+        action="store_true",
+        help="print progress and the result as JSON lines, for other programs",
     )
     p_test.add_argument(
         "--country", type=str, default=None, help="two-letter country code, e.g. PL"
